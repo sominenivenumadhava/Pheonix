@@ -1,0 +1,84 @@
+# -*- mode: ruby -*-
+# vi: set ft=ruby :
+# ==============================================================================
+# Phoenix - VirtualBox Offline Infrastructure (Vagrantfile)
+# Provisions the identical 4-node topology for offline demonstrations
+# ==============================================================================
+
+Vagrant.configure("2") do |config|
+  config.vm.box = "ubuntu/jammy64"
+  config.ssh.insert_key = false
+
+  # --- Node 1: Control Node (Ansible & CLI) ---
+  config.vm.define "control-node" do |node|
+    node.vm.hostname = "control-node"
+    node.vm.network "private_network", ip: "192.168.56.10"
+    node.vm.provider "virtualbox" do |vb|
+      vb.name = "phoenix-control-node"
+      vb.memory = "2048"
+      vb.cpus = 1
+    end
+    node.vm.provision "shell", inline: <<-SHELL
+      apt-get update -y
+      apt-get install -y python3 python3-pip git curl jq
+    SHELL
+  end
+
+  # --- Node 2: Puppet Master ---
+  config.vm.define "puppet-master" do |node|
+    node.vm.hostname = "puppet-master"
+    node.vm.network "private_network", ip: "192.168.56.20"
+    node.vm.provider "virtualbox" do |vb|
+      vb.name = "phoenix-puppet-master"
+      vb.memory = "3072"
+      vb.cpus = 2
+    end
+    node.vm.provision "shell", inline: <<-SHELL
+      apt-get update -y
+      apt-get install -y openjdk-11-jre-headless
+      wget https://apt.puppet.com/puppet7-release-jammy.deb -O /tmp/puppet.deb
+      dpkg -i /tmp/puppet.deb
+      apt-get update -y
+      apt-get install -y puppetserver
+      sed -i 's/-Xms2g -Xmx2g/-Xms1g -Xmx1g/' /etc/default/puppetserver
+      systemctl enable puppetserver || true
+    SHELL
+  end
+
+  # --- Node 3: Application Server ---
+  config.vm.define "app-server" do |node|
+    node.vm.hostname = "app-server"
+    node.vm.network "private_network", ip: "192.168.56.30"
+    node.vm.network "forwarded_port", guest: 80, host: 8080, auto_correct: true
+    node.vm.provider "virtualbox" do |vb|
+      vb.name = "phoenix-app-server"
+      vb.memory = "2048"
+      vb.cpus = 1
+    end
+    node.vm.provision "shell", inline: <<-SHELL
+      apt-get update -y
+      apt-get install -y python3 python3-venv sqlite3 curl git
+      wget https://apt.puppet.com/puppet7-release-jammy.deb -O /tmp/puppet.deb
+      dpkg -i /tmp/puppet.deb
+      apt-get update -y
+      apt-get install -y puppet-agent
+    SHELL
+  end
+
+  # --- Node 4: Nagios Monitoring Server ---
+  config.vm.define "nagios-server" do |node|
+    node.vm.hostname = "nagios-server"
+    node.vm.network "private_network", ip: "192.168.56.40"
+    node.vm.network "forwarded_port", guest: 80, host: 8088, auto_correct: true
+    node.vm.provider "virtualbox" do |vb|
+      vb.name = "phoenix-nagios-server"
+      vb.memory = "2048"
+      vb.cpus = 1
+    end
+    node.vm.provision "shell", inline: <<-SHELL
+      apt-get update -y
+      apt-get install -y apache2 php build-essential python3 python3-pip curl
+      systemctl enable apache2
+    SHELL
+  end
+end

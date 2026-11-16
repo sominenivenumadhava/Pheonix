@@ -135,3 +135,6 @@ status.dat
 tmp/
 temp/
 scratch/
+
+# Local Terraform Binary
+terraform_bin/

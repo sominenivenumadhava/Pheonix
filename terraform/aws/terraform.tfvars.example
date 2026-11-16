@@ -1,0 +1,9 @@
+# ==============================================================================
+# Example Terraform Variables (Copy to terraform.tfvars - DO NOT COMMIT SECRETS)
+# ==============================================================================
+aws_region           = "us-east-1"
+admin_ip             = "203.0.113.50/32"  # Replace with your public IP CIDR
+key_name             = "phoenix-demo-key"
+instance_type_app    = "t3.micro"
+instance_type_puppet = "t3.small"
+instance_type_nagios = "t3.micro"

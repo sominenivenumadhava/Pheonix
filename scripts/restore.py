@@ -161,7 +161,7 @@ def main():
     parser.add_argument("--backup-file", default=None, help="Path to specific backup .db file")
     parser.add_argument("--backup-dir", default=default_backup,
                         help="Directory to search for latest backup")
-    parser.add_argument("--target-db", default=default_db,
+    parser.add_argument("--target-db", "--db-path", dest="target_db", default=default_db,
                         help="Destination SQLite database file")
     args = parser.parse_args()
 

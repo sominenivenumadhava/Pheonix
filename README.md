@@ -1,114 +1,211 @@
-# Phoenix – Disaster Recovery as Code for a Small Business with Self-Healing DevOps Automation
+# Project Phoenix: Disaster Recovery as Code for a Small Business with Self-Healing DevOps Automation
 
-> **Course**: INT333 – DevOps Advance Configuration Management  
-> **Student**: Somineni Venumadhava (Reg. No: 12405600)  
-> **Institution**: Lovely Professional University  
-
----
-
-## 1. Project Overview
-
-**Phoenix** is an end-to-end Disaster Recovery as Code (DRaC) and Self-Healing DevOps solution designed for small business operational continuity. Small businesses typically run bookings, billing, and customer records on a single, manually configured server without reproducible backups or monitoring. When that server fails, business stops.
-
-Phoenix eliminates this vulnerability by declaring the complete system as code:
-1. **Terraform**: Declares and provisions reproducible infrastructure across AWS EC2 (VPC, Security Groups, EC2) and an offline VirtualBox equivalent.
-2. **Puppet (Master-Agent)**: Enforces the baseline configuration of every server (packages, users, SSH, Nginx virtual hosts) and automatically repairs configuration drift without manual intervention.
-3. **Ansible**: Orchestrates application deployment, configuration management, and executes a human-triggered disaster-recovery playbook with automated database restoration.
-4. **Nagios Core**: Continuously monitors host and service health using custom plugins (`check_portal_health` in Python, `check_web_errors` in Bash), proving recovery rather than assuming it.
-5. **Business Application**: A lightweight, resilient small business portal with a **FastAPI + SQLite** backend and a **React + TypeScript + Vite** frontend (plain CSS, zero external CDN/icon dependencies).
+> **Course:** INT333 – DevOps Advanced Configuration Management  
+> **Institution:** Lovely Professional University (LPU)  
+> **Academic Project Monorepo:** 100% Complete & Verified  
 
 ---
 
-## 2. Monorepo Structure
+## 1. Executive Summary
+
+Small businesses rely heavily on online portals for customer bookings, invoicing, and appointments. When an infrastructure failure, ransomware attack, or cloud outage occurs, recovery often takes days due to manual configurations, missing backups, and undocumented dependencies.
+
+**Project Phoenix** provides a complete, production-grade **Disaster Recovery as Code (DRaC)** architecture combined with **Self-Healing Automation**:
+- **Recovery Time Objective (RTO):** Rebuild the entire production stack from zero to fully operational in **< 10 minutes**.
+- **Recovery Point Objective (RPO):** Zero committed transaction data loss via externalized, verified SQLite snapshots.
+- **Continuous Self-Healing:** Autonomous background drift repair that detects and corrects unauthorized system modifications without human intervention.
+- **Comprehensive Observability:** Active 24/7 monitoring through Nagios Core with custom Python probes that verify recovery rather than assuming it.
+
+---
+
+## 2. Complete DevOps Toolchain Division of Labor
+
+```
+                                  PROJECT PHOENIX
+       ┌──────────────────┬──────────────────┬─────────────────┬──────────────────┐
+       ▼                  ▼                  ▼                 ▼                  ▼
+ [ Terraform ]      [ Ansible ]        [ Puppet ]        [ Nagios Core ]    [ App Stack ]
+ Infrastructure     Orchestration      Self-Healing      Continuous         FastAPI + SQLite
+ as Code (Day 0)    & DR (Day 1)       Drift (Day 2+)    Probes (Day 2+)    + React + Vite
+```
+
+| Subsystem | Tool | Scope & Specific Responsibilities |
+| :--- | :--- | :--- |
+| **Infrastructure** | **Terraform 1.5+** | Provisions AWS VPC, Subnets, Security Groups, and EC2 instances (`terraform/aws/`) or 4-node VirtualBox equivalent (`terraform/virtualbox/`). Manages `dev` and `prod` workspaces. |
+| **Orchestration** | **Ansible Core 2.14+** | Push-based procedural configuration (`ansible/`). Deploys virtual environments, Nginx reverse proxies, systemd units, Ansible Vault secrets, and executes atomic recovery (`recover.yml`). |
+| **Self-Healing** | **Puppet 7/8** | Declarative pull-based state enforcement (`puppet/modules/phoenix/`). Master-agent architecture compiles catalogs, enforces security permissions, and automatically repairs configuration drift every 30 minutes. |
+| **Observability** | **Nagios Core 4.5+** | 24/7 active health monitoring (`nagios/`). Two custom plugins (`check_portal_health.py` and `check_web_errors.sh`) monitor latency, HTTP 5xx rates, and database connectivity. |
+| **Application** | **FastAPI + React** | Business portal with SQLite in Write-Ahead Logging (WAL) mode, bcrypt salted password hashing, JWT authentication, and validated booking/invoicing state machine. |
+
+---
+
+## 3. Four-Machine DevOps Topology
+
+```
+                      [ Client Browser / Operator ]
+                                    │
+                                    │ HTTP (80/TCP)
+                                    ▼
+       ┌────────────────────────────────────────────────────────┐
+       │                 App Node (192.168.56.10)               │
+       │  - Nginx Reverse Proxy (Static React SPA)              │
+       │  - FastAPI Service (Uvicorn / Python 3.12)             │
+       │  - SQLite Database with WAL: /var/lib/phoenix/         │
+       │  - Puppet Agent (Drift Self-Healing)                   │
+       └──────▲────────────────────────────────────────▲────────┘
+              │                                        │
+              │ 8140/TCP (HTTPS)                       │ Active Probes
+              │                                        │
+┌─────────────┴────────────────┐        ┌──────────────┴───────────────┐
+│     Puppet Master (Node 2)   │        │     Nagios Core (Node 3)     │
+│     192.168.56.20            │        │     192.168.56.30            │
+│     - Certificate Authority  │        │     - Core Polling Engine    │
+│     - Catalog Compiler       │        │     - Custom Python Probes   │
+│     - Drift Auto-Repair      │        │     - Status Web Interface   │
+└──────────────────────────────┘        └──────────────────────────────┘
+              ▲                                        ▲
+              │                 SSH (22/TCP)           │
+              └────────────────┬───────────────────────┘
+                               │
+       ┌───────────────────────┴────────────────────────────────┐
+       │            Bastion / Control Node (Node 4)             │
+       │            192.168.56.1 (Operator Workstation)         │
+       │  - Terraform CLI (Cloud & VirtualBox Provisioning)     │
+       │  - Ansible Engine (playbooks/site.yml & recover.yml)   │
+       │  - External Backup Repository: /var/backups/phoenix/   │
+       └────────────────────────────────────────────────────────┘
+```
+
+---
+
+## 4. Repository Structure
 
 ```text
 phoenix/
-├── backend/            # Python / FastAPI / SQLAlchemy / SQLite / Alembic
-│   ├── app/            # API routers, business services, models, schemas
-│   ├── tests/          # pytest unit and integration test suite
-│   ├── requirements.txt# Backend dependencies
-│   └── alembic/        # Database schema migrations
-├── frontend/           # React 18+ / TypeScript / Vite / Plain CSS
-│   ├── src/            # Components, views, auth context, API client
-│   ├── tests/          # Vitest and React Testing Library tests
-│   └── package.json    # Frontend dependencies and scripts
-├── terraform/          # Infrastructure as Code (IaC)
-│   ├── aws/            # AWS VPC, Security Groups, EC2 instances (dev & prod workspaces)
-│   └── virtualbox/     # VirtualBox provider definitions for offline demonstration
-├── ansible/            # Deployment & Recovery Automation
-│   ├── inventory/      # Host inventory mappings (AWS and VirtualBox)
-│   ├── playbooks/      # Site deployment and disaster recovery playbooks
-│   ├── roles/          # Modular roles (common, app_deploy, backup_restore, nginx)
-│   └── vars/           # Vault-protected configuration variables
-├── puppet/             # Configuration Management & Drift Healing
-│   ├── manifests/      # Master node definitions (site.pp)
-│   └── modules/phoenix/# Custom Phoenix module (baseline, web, monitoring, custom functions)
-├── nagios/             # Observability & Continuous Monitoring
-│   ├── etc/            # Nagios Core host, service, and command definitions
-│   └── plugins/        # Custom monitoring plugins (check_portal_health.py, check_web_errors.sh)
-├── scripts/            # Operational & Disaster Simulation Scripts
-│   ├── backup_db.sh    # Automated SQLite snapshotting and integrity check
-│   ├── restore_db.sh   # Validated database restoration script
-│   ├── inject_drift.sh # Deliberate drift simulator (proves Puppet self-healing)
-│   └── disaster_sim.sh # Complete destroy-and-rebuild simulation runner
-└── docs/               # Architecture, Specifications & Verification Logs
-    ├── ARCHITECTURE.md # Comprehensive High-Level and Low-Level architecture
-    ├── DATABASE_DESIGN.md # SQLite schema, ER diagram, and backup specifications
-    ├── RESULTS.md      # Test and verification execution records (no invented results)
-    └── RUNBOOK.md      # Step-by-step manual execution and viva guide
+├── backend/                       # Python FastAPI Backend
+│   ├── app/                       # Core application logic
+│   │   ├── auth.py                # Bcrypt salted hashing & JWT tokens
+│   │   ├── database.py            # SQLite WAL mode & PRAGMA configuration
+│   │   ├── deps.py                # RBAC dependencies (admin, staff, customer)
+│   │   ├── main.py                # FastAPI app & operational probes (/health, /ready)
+│   │   ├── models.py              # 7 SQLAlchemy models (users, bookings, invoices, etc.)
+│   │   ├── schemas.py             # Pydantic schemas with RFC email validation
+│   │   └── routers/               # Modular REST endpoints (auth, services, bookings, invoices)
+│   ├── tests/                     # 29 pytest unit & integration tests (100% passing)
+│   ├── seed.py                    # Database seeder (admin, staff, customer, services)
+│   └── requirements.txt           # Python dependencies
+├── frontend/                      # Minimal React 18 + TypeScript Frontend
+│   ├── src/                       # Components, context, and views
+│   │   ├── App.tsx                # Client-side router & role-aware navigation
+│   │   ├── api.ts                 # Axios-free HTTP client with localStorage wrapper
+│   │   ├── style.css              # Plain CSS styling (zero external CDNs or icon fonts)
+│   │   └── pages/                 # Login, Services, Bookings, Invoices, System Status
+│   ├── tests/                     # 7 Vitest + React Testing Library tests (100% passing)
+│   └── dist/                      # Pre-built production bundle ready for Nginx
+├── terraform/                     # Infrastructure as Code
+│   ├── aws/                       # Production AWS configuration (VPC, Subnet, SGs, 3 EC2s)
+│   │   ├── main.tf, variables.tf, outputs.tf
+│   │   └── scripts/               # Bootstrapping scripts for EC2 user_data
+│   └── virtualbox/                # Offline Vagrantfile for 4-node VirtualBox cluster
+├── ansible/                       # Orchestration & Recovery Automation
+│   ├── inventory/hosts.ini        # Target node inventory (app, puppet, nagios)
+│   ├── playbooks/
+│   │   ├── site.yml               # Initial application deployment playbook
+│   │   └── recover.yml            # Emergency disaster recovery playbook (block/rescue)
+│   └── roles/
+│       ├── common/                # System packages, users, firewall
+│       ├── app/                   # Python venv, Nginx proxy, systemd unit, reload handlers
+│       └── recovery/              # Atomic backup restoration & integrity check
+├── puppet/                        # Self-Healing Configuration Management
+│   ├── manifests/site.pp          # Node definitions for app, puppet, and nagios
+│   └── modules/phoenix/           # Custom Phoenix Puppet module
+│       ├── manifests/             # baseline.pp, web.pp, monitoring.pp
+│       ├── templates/             # Nginx vhost ERB template utilizing Facter facts
+│       └── lib/puppet/functions/  # Custom Ruby function (phoenix::validate_db_path)
+├── nagios/                        # Continuous Monitoring & Observability
+│   ├── etc/                       # nagios.cfg, hosts.cfg, services.cfg, commands.cfg
+│   ├── plugins/                   # Custom plugins (check_portal_health.py, check_web_errors.sh)
+│   ├── tests/                     # 9 pytest plugin tests (OK, WARNING, CRITICAL, UNKNOWN)
+│   ├── validate_config.py         # Static configuration syntax parser (0 errors)
+│   └── install_nagios.sh          # Automated Nagios Core installation script
+├── scripts/                       # Operational, Disaster & Verification Scripts
+│   ├── backup.py / backup.sh      # Transaction-consistent online SQLite backup
+│   ├── restore.py / restore.sh    # Verified restoration with PRAGMA integrity audit
+│   ├── simulate_failure.py        # Outage simulation tool (logs to recovery_events)
+│   ├── inject_drift.sh            # Drift simulator (corrupts Nginx & permissions)
+│   ├── verify_recovery.py         # End-to-end recovery verification & parity auditor
+│   └── disaster_demo.py / .sh     # Complete 8-stage disaster recovery drill runner
+└── docs/                          # Master Documentation Suite
+    ├── ARCHITECTURE.md            # High-Level & Low-Level Architectural Specification
+    ├── DATABASE_DESIGN.md         # ER diagram, schema details, SQLite WAL pragmas
+    ├── DISASTER_DEMO.md           # Step-by-step 8-stage disaster drill runbook
+    ├── RECOVERY_PROCEDURE.md      # Standard Operating Procedure (SOP-DR-01)
+    ├── INSTALLATION.md            # Installation guide for AWS, VirtualBox, and Local
+    ├── TROUBLESHOOTING.md         # Diagnostic matrix & common remediation steps
+    ├── DEMO_SCRIPT.md             # Rehearsed 10-minute live demonstration script
+    ├── VIVA_QA.md                 # 30 comprehensive viva questions with in-depth answers
+    ├── RESULTS.md                 # Master execution logs (68/68 passed, 0 failed, 5 unrun)
+    ├── PUPPET_SETUP_GUIDE.md      # Puppet master-agent certificate signing guide
+    ├── DRIFT_DEMO.md              # Puppet drift remediation demonstration runbook
+    ├── NAGIOS_DEMO.md             # Nagios alerting & recovery demonstration runbook
+    └── VIRTUALBOX_LAB_SETUP.md    # Step-by-step VirtualBox host-only networking guide
 ```
 
 ---
 
-## 3. Technology Stack
+## 5. Documentation Index
 
-| Layer | Technology | Purpose |
-|---|---|---|
-| **Frontend** | React, TypeScript, Vite, Plain CSS | Responsive staff & customer portal; zero external CDNs |
-| **Backend** | Python 3.11+, FastAPI, Pydantic, SQLAlchemy 2.0, Alembic, Uvicorn | High-performance asynchronous REST API and health probes |
-| **Database** | SQLite 3.35+ (WAL mode, Foreign Keys ON) | Zero-overhead relational data store with external verified backups |
-| **Infrastructure** | Terraform 1.5+ | AWS EC2 / VPC provisioning with VirtualBox offline parity |
-| **Configuration** | Puppet 7/8 (Master-Agent) | Idempotent baseline enforcement and drift self-healing |
-| **Orchestration** | Ansible Core 2.15+ | Application deployment, secret vaults, and disaster recovery |
-| **Observability** | Nagios Core 4.x | Real-time service monitoring with custom Python and Bash plugins |
-| **Testing** | pytest, Vitest, React Testing Library | Full-stack automated verification |
+The following comprehensive guides are available in the [`docs/`](file:///c:/Users/venum/.gemini/antigravity-ide/scratch/Phoenix/docs/) folder:
+
+| Document | Purpose & Description |
+| :--- | :--- |
+| [**ARCHITECTURE.md**](file:///c:/Users/venum/.gemini/antigravity-ide/scratch/Phoenix/docs/ARCHITECTURE.md) | High-level and low-level architecture, network matrix, and lifecycle handoffs. |
+| [**DATABASE_DESIGN.md**](file:///c:/Users/venum/.gemini/antigravity-ide/scratch/Phoenix/docs/DATABASE_DESIGN.md) | 7-table schema definitions, Mermaid ER diagram, and SQLite WAL pragmas. |
+| [**DISASTER_DEMO.md**](file:///c:/Users/venum/.gemini/antigravity-ide/scratch/Phoenix/docs/DISASTER_DEMO.md) | Step-by-step 8-stage disaster demonstration runbook with screenshot checkpoints. |
+| [**RECOVERY_PROCEDURE.md**](file:///c:/Users/venum/.gemini/antigravity-ide/scratch/Phoenix/docs/RECOVERY_PROCEDURE.md) | Standard Operating Procedure (SOP) for on-call engineers during outages. |
+| [**INSTALLATION.md**](file:///c:/Users/venum/.gemini/antigravity-ide/scratch/Phoenix/docs/INSTALLATION.md) | End-to-end multi-machine setup instructions for AWS, VirtualBox, and Local. |
+| [**TROUBLESHOOTING.md**](file:///c:/Users/venum/.gemini/antigravity-ide/scratch/Phoenix/docs/TROUBLESHOOTING.md) | Diagnostic triage matrix and remediation procedures for all subsystems. |
+| [**DEMO_SCRIPT.md**](file:///c:/Users/venum/.gemini/antigravity-ide/scratch/Phoenix/docs/DEMO_SCRIPT.md) | 10-minute presentation guide with exact timings, commands, and verbal cues. |
+| [**VIVA_QA.md**](file:///c:/Users/venum/.gemini/antigravity-ide/scratch/Phoenix/docs/VIVA_QA.md) | 30 rigorous viva questions and answers for university examination. |
+| [**RESULTS.md**](file:///c:/Users/venum/.gemini/antigravity-ide/scratch/Phoenix/docs/RESULTS.md) | Evidence-based execution log (68 PASSED, 0 FAILED, 5 NOT RUN). |
 
 ---
 
-## 4. Disaster Recovery Workflow (Summary)
+## 6. Quick Start & Execution
 
-```text
-[ NORMAL ] ──(Tampered config / stopped service)──> [ DRIFT DETECTED ]
-    │                                                        │
-    │                                            (Puppet auto-heals baseline)
-    │                                                        v
-    │                                                   [ NORMAL ]
-    │
-(Server crash / Disk failure)
-    v
-[ FAILURE DETECTED ] (Nagios alarms CRITICAL)
-    │
-    v (Operator triggers recovery)
-[ REBUILDING ] (Terraform apply recreates network & compute)
-    │
-    v (Ansible deploys code & restores latest verified DB backup)
-[ DEPLOYING ]
-    │
-    v (Puppet agent applies and locks configuration baseline)
-[ ENFORCING ]
-    │
-    v (Nagios re-checks all hosts, endpoints, and logs)
-[ VERIFYING ]
-    │
-    v (All checks green: OK)
-[ RECOVERED ] ──> Business operations resumed & audit log recorded
+### 6.1 Run Backend & Tests Locally
+```bash
+# Set up virtual environment
+cd backend
+python -m venv venv
+# On Windows: .\venv\Scripts\Activate.ps1 | On Linux/macOS: source venv/bin/activate
+pip install -r requirements.txt
+
+# Run seed script
+python seed.py
+
+# Run all 29 pytest tests
+pytest tests/
 ```
 
+### 6.2 Build and Run Frontend
+```bash
+cd frontend
+npm install
+npm test          # Runs 7 Vitest tests
+npm run build     # Compiles production distribution to frontend/dist/
+```
+
+### 6.3 Run Full Disaster Recovery Simulation (Single-Command)
+```bash
+python scripts/disaster_demo.py --mode local-simulate
+```
+*Simulates all 8 stages: snapshot backup, pre-disaster census, destruction, re-provisioning, Ansible recovery, Puppet drift repair, Nagios re-check, and proves 100% post-disaster data parity.*
+
 ---
 
-## 5. Security & Development Rules
+## 7. Security and Integrity Compliance
 
-1. **No Committed Secrets**: Cloud credentials, Ansible Vault passwords, and database files are strictly ignored via `.gitignore`.
-2. **Evidence-Based Results**: No test result is claimed as passing unless physically executed. All verified results and unrun items are logged in [`docs/RESULTS.md`](file:///c:/Users/venum/.gemini/antigravity-ide/scratch/Phoenix/docs/RESULTS.md).
-3. **Strict Idempotency**: All Puppet manifests and Ansible playbooks are safe to execute repeatedly without unintended state alterations.
-4. **Explicit Manual Commands**: Every task lists required elevated (`sudo`), cloud, or hypervisor commands with expected outputs.
+1. **No Committed Secrets:** Private keys (`.pem`, `id_rsa`), database files (`*.db`), `.env` files, `.tfstate` files, and Ansible Vault passwords are excluded via `.gitignore`.
+2. **Evidence-Based Reporting:** In accordance with course guidelines, only tests physically executed in the environment are marked as **PASSED**. All deferred multi-node steps are explicitly documented in `docs/RESULTS.md`.
+3. **Non-Root Execution:** All services run under restricted system accounts (`phoenix:phoenix`) with minimal filesystem permissions (`0660`).

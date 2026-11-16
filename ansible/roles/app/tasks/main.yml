@@ -1,0 +1,147 @@
+---
+# ==============================================================================
+# Role: app - Tasks
+# Deploys Backend, Frontend static build, Nginx reverse proxy, and systemd service
+# ==============================================================================
+- name: Install Nginx web server
+  apt:
+    name: nginx
+    state: present
+  tags: [app, nginx]
+
+- name: Create Python virtual environment for Phoenix
+  command: python3 -m venv "{{ phoenix_venv_dir }}"
+  args:
+    creates: "{{ phoenix_venv_dir }}/bin/activate"
+  tags: [app, venv]
+
+- name: Upgrade pip in virtualenv
+  pip:
+    name: pip
+    state: latest
+    virtualenv: "{{ phoenix_venv_dir }}"
+  tags: [app, venv]
+
+- name: Deploy backend source code to application directory
+  copy:
+    src: "{{ phoenix_backend_src }}/"
+    dest: "{{ phoenix_backend_dir }}/"
+    owner: phoenix
+    group: phoenix
+    mode: '0755'
+    exclude:
+      - "__pycache__"
+      - "*.pyc"
+      - ".pytest_cache"
+  notify: restart phoenix-backend
+  tags: [app, backend]
+
+- name: Deploy disaster recovery scripts
+  copy:
+    src: "{{ phoenix_scripts_src }}/"
+    dest: "{{ phoenix_app_dir }}/scripts/"
+    owner: phoenix
+    group: phoenix
+    mode: '0755'
+  tags: [app, scripts]
+
+- name: Install backend Python dependencies
+  pip:
+    requirements: "{{ phoenix_backend_dir }}/requirements.txt"
+    virtualenv: "{{ phoenix_venv_dir }}"
+  notify: restart phoenix-backend
+  tags: [app, backend, dependencies]
+
+- name: Check if SQLite database exists
+  stat:
+    path: "{{ phoenix_backend_dir }}/phoenix.db"
+  register: db_file_stat
+  tags: [app, database]
+
+- name: Seed database with initial users and services if not present
+  command: "{{ phoenix_venv_dir }}/bin/python {{ phoenix_backend_dir }}/seed.py"
+  become_user: phoenix
+  when: not db_file_stat.stat.exists
+  tags: [app, database]
+
+- name: Create web root directory for static frontend
+  file:
+    path: "{{ phoenix_web_dir }}"
+    state: directory
+    owner: www-data
+    group: www-data
+    mode: '0755'
+  tags: [app, frontend]
+
+- name: Deploy compiled frontend static build
+  copy:
+    src: "{{ phoenix_frontend_dist }}/"
+    dest: "{{ phoenix_web_dir }}/"
+    owner: www-data
+    group: www-data
+    mode: '0644'
+  tags: [app, frontend]
+
+- name: Configure Nginx virtual host for Phoenix
+  template:
+    src: nginx-phoenix.conf.j2
+    dest: /etc/nginx/sites-available/phoenix
+    owner: root
+    group: root
+    mode: '0644'
+  notify: reload nginx
+  tags: [app, nginx]
+
+- name: Remove default Nginx virtual host
+  file:
+    path: /etc/nginx/sites-enabled/default
+    state: absent
+  notify: reload nginx
+  tags: [app, nginx]
+
+- name: Enable Phoenix Nginx site
+  file:
+    src: /etc/nginx/sites-available/phoenix
+    dest: /etc/nginx/sites-enabled/phoenix
+    state: link
+  notify: reload nginx
+  tags: [app, nginx]
+
+- name: Deploy systemd service unit for Phoenix backend
+  template:
+    src: phoenix-backend.service.j2
+    dest: /etc/systemd/system/phoenix-backend.service
+    owner: root
+    group: root
+    mode: '0644'
+  notify: restart phoenix-backend
+  tags: [app, systemd]
+
+- name: Flush handlers to ensure services and Nginx are applied
+  meta: flush_handlers
+  tags: [app]
+
+- name: Ensure Phoenix backend service is enabled and running
+  systemd:
+    name: phoenix-backend
+    enabled: yes
+    state: started
+  tags: [app, systemd]
+
+- name: Ensure Nginx is enabled and running
+  systemd:
+    name: nginx
+    enabled: yes
+    state: started
+  tags: [app, nginx]
+
+- name: Verify application /health probe is responding HTTP 200
+  uri:
+    url: "http://127.0.0.1/health"
+    status_code: 200
+    return_content: yes
+  register: health_response
+  retries: 5
+  delay: 3
+  until: health_response.status == 200
+  tags: [app, verify]

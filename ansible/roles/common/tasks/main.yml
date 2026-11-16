@@ -1,0 +1,67 @@
+---
+# ==============================================================================
+# Role: common - Tasks
+# ==============================================================================
+- name: Ensure apt cache is updated
+  apt:
+    update_cache: yes
+    cache_valid_time: 3600
+  tags: [common, packages]
+
+- name: Install baseline system packages
+  apt:
+    name:
+      - curl
+      - git
+      - ufw
+      - python3
+      - python3-pip
+      - python3-venv
+      - sqlite3
+      - htop
+      - net-tools
+      - jq
+    state: present
+  tags: [common, packages]
+
+- name: Ensure system group 'phoenix' exists
+  group:
+    name: phoenix
+    state: present
+  tags: [common, users]
+
+- name: Ensure system user 'phoenix' exists
+  user:
+    name: phoenix
+    group: phoenix
+    shell: /bin/bash
+    home: /home/phoenix
+    create_home: yes
+    state: present
+  tags: [common, users]
+
+- name: Create required Phoenix directories with correct permissions
+  file:
+    path: "{{ item }}"
+    state: directory
+    owner: phoenix
+    group: phoenix
+    mode: '0755'
+  loop:
+    - /opt/phoenix
+    - /opt/phoenix/backend
+    - /var/backups/phoenix-db
+    - /var/log/phoenix
+  tags: [common, directories]
+
+- name: Ensure UFW firewall rules allow essential ports
+  ufw:
+    rule: allow
+    port: "{{ item.port }}"
+    proto: "{{ item.proto | default('tcp') }}"
+  loop:
+    - { port: '22', proto: 'tcp' }   # SSH
+    - { port: '80', proto: 'tcp' }   # HTTP
+    - { port: '443', proto: 'tcp' }  # HTTPS
+  notify: reload ufw
+  tags: [common, firewall]

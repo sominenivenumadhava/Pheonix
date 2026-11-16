@@ -1,0 +1,20 @@
+---
+# ==============================================================================
+# Phoenix - Full Infrastructure & Application Deployment Playbook (site.yml)
+# ==============================================================================
+
+- name: Apply Baseline System Configuration across all Phoenix Nodes
+  hosts: phoenix_nodes
+  become: yes
+  roles:
+    - common
+  tags: [common]
+
+- name: Deploy Phoenix Small Business Portal Application
+  hosts: app
+  become: yes
+  vars_files:
+    - ../vars/secrets.yml
+  roles:
+    - app
+  tags: [app, deploy]

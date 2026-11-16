@@ -1,0 +1,46 @@
+---
+# ==============================================================================
+# Phoenix - Disaster Recovery Playbook (recover.yml)
+# Workflow: Preflight Checks -> Application Deployment -> Database Restore ->
+#           Health Verification -> Recovery Audit
+# ==============================================================================
+
+- name: Phoenix Disaster Recovery - Application Rebuild & Database Restoration
+  hosts: app
+  become: yes
+  vars_files:
+    - ../vars/secrets.yml
+  pre_tasks:
+    - name: DR Preflight - Verify host connectivity and SSH access
+      ping:
+      tags: [preflight, recovery]
+
+    - name: DR Preflight - Record disaster recovery initiation timestamp
+      debug:
+        msg: "Disaster Recovery initiated at {{ ansible_date_time.iso8601 }} on host {{ inventory_hostname }}"
+      tags: [preflight, recovery]
+
+  roles:
+    - role: common
+      tags: [common, recovery]
+    - role: app
+      tags: [app, deploy, recovery]
+    - role: recovery
+      tags: [restore, recovery]
+
+  post_tasks:
+    - name: DR Postflight - Final Service Observability Check
+      uri:
+        url: "http://127.0.0.1/health"
+        status_code: 200
+        return_content: yes
+      register: final_health
+      tags: [verify, recovery]
+
+    - name: DR Postflight - Display Health Certification
+      debug:
+        msg: >
+          SYSTEM RECOVERED: Service is reporting {{ final_health.json.status }}.
+          Database is reporting {{ final_health.json.db }}.
+          Nagios checks will transition from CRITICAL to OK.
+      tags: [verify, recovery]

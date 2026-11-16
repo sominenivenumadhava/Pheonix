@@ -1,0 +1,21 @@
+[Unit]
+Description=Phoenix Small Business Portal Backend (FastAPI + Uvicorn)
+After=network.target
+
+[Service]
+Type=simple
+User=phoenix
+Group=phoenix
+WorkingDirectory=/opt/phoenix/backend
+Environment="PATH=/opt/phoenix/venv/bin:/usr/bin"
+Environment="SECRET_KEY={{ app_secret_key }}"
+Environment="DATABASE_URL=sqlite:////opt/phoenix/backend/phoenix.db"
+Environment="BACKUP_DIR=/var/backups/phoenix-db"
+ExecStart=/opt/phoenix/venv/bin/uvicorn app.main:app --host 127.0.0.1 --port 8000 --workers 2
+Restart=always
+RestartSec=5s
+StandardOutput=append:/var/log/phoenix/backend.log
+StandardError=append:/var/log/phoenix/backend-error.log
+
+[Install]
+WantedBy=multi-user.target

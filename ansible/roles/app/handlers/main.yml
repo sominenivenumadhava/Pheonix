@@ -1,0 +1,15 @@
+---
+# ==============================================================================
+# Role: app - Handlers
+# Reloads Nginx ONLY when configuration templates change
+# ==============================================================================
+- name: reload nginx
+  service:
+    name: nginx
+    state: reloaded
+
+- name: restart phoenix-backend
+  systemd:
+    name: phoenix-backend
+    state: restarted
+    daemon_reload: yes

@@ -1,0 +1,9 @@
+---
+phoenix_backend_src: "{{ playbook_dir }}/../backend"
+phoenix_frontend_dist: "{{ playbook_dir }}/../frontend/dist"
+phoenix_scripts_src: "{{ playbook_dir }}/../scripts"
+phoenix_app_dir: "/opt/phoenix"
+phoenix_backend_dir: "/opt/phoenix/backend"
+phoenix_web_dir: "/var/www/phoenix"
+phoenix_venv_dir: "/opt/phoenix/venv"
+app_secret_key: "phoenix-production-secret-key-change-in-vault-2026"

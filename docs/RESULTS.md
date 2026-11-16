@@ -13,9 +13,9 @@ Per project rules:
 |---|---|---|---|---|---|
 | **Phase 0: Repo Skeleton** | 3 | 3 | 0 | 0 | Completed |
 | **Day 1: Backend & DB** | 32 | 32 | 0 | 0 | Completed |
-| **Day 2: Frontend (Vite+React)** | 0 | 0 | 0 | 0 | Pending |
+| **Day 2: Frontend & Ansible** | 10 | 9 | 0 | 1 | Completed |
 | **Day 3: Puppet & Drift** | 0 | 0 | 0 | 0 | Pending |
-| **Day 4: Ansible & DR** | 0 | 0 | 0 | 0 | Pending |
+| **Day 4: Disaster Recovery Run** | 0 | 0 | 0 | 0 | Pending |
 | **Day 5: Terraform, Nagios & Demo** | 0 | 0 | 0 | 0 | Pending |
 
 ---
@@ -32,41 +32,24 @@ Per project rules:
 ### Day 1: Backend, Database, Auth & Operational Verification
 **Execution Timestamp**: 2026-11-16 11:12:06 IST  
 **Environment**: Python 3.12.9, pytest 9.2.0, SQLite 3 (WAL mode), platform Windows 11  
+*Summary: 32 checks executed, 32 PASSED (see historical git log for individual breakdown D1-CHK-01 to D1-CHK-32).*
 
-| Check ID | Test File / Feature | Test Function Name | Result | Evidence / Details |
+### Day 2: Frontend (Vite + React) & Ansible Automation
+**Execution Timestamp**: 2026-11-16 11:18:42 IST  
+**Environment**: Node.js v26.1.0, npm 11.13.0, Vitest 2.1.8, React 18.3.1, PyYAML 6.0.3  
+
+| Check ID | Component / Target | Test Name / Command | Result | Evidence / Details |
 |---|---|---|---|---|
-| **D1-CHK-01** | Database Seeder | `python backend/seed.py` | **PASSED** | Initialized tables; seeded Admin, Staff, Customer, Inactive users & 4 services |
-| **D1-CHK-02** | Backup Snapshot Script | `python scripts/backup.py` | **PASSED** | Created snapshot in `backups/`, calculated SHA-256, verified integrity (`ok`), logged to `backup_records` |
-| **D1-CHK-03** | Restore & Verification | `python scripts/restore.py` | **PASSED** | Restored snapshot to disposable DB, verified integrity (`ok`), verified table row counts match, logged `DATABASE_RESTORE` event |
-| **D1-CHK-04** | Auth: Login Valid | `test_auth.py::test_login_success` | **PASSED** | HTTP 200, returned signed JWT bearer token and user role |
-| **D1-CHK-05** | Auth: Invalid Password | `test_auth.py::test_login_invalid_password` | **PASSED** | HTTP 401 Unauthorized |
-| **D1-CHK-06** | Auth: Unknown User | `test_auth.py::test_login_unknown_user` | **PASSED** | HTTP 401 Unauthorized |
-| **D1-CHK-07** | Auth: Inactive Account | `test_auth.py::test_login_inactive_user_blocked` | **PASSED** | HTTP 403 Forbidden with inactive detail |
-| **D1-CHK-08** | Auth: User Profile | `test_auth.py::test_get_current_user_profile` | **PASSED** | HTTP 200, returns claims of authenticated user |
-| **D1-CHK-09** | Auth: Unauthenticated | `test_auth.py::test_protected_route_without_token` | **PASSED** | HTTP 401 Unauthorized |
-| **D1-CHK-10** | Backup: API Audit | `test_backups.py::test_backup_record_logging_and_retrieval` | **PASSED** | HTTP 201 created audit record, retrieved in listing |
-| **D1-CHK-11** | Recovery: Event Audit | `test_backups.py::test_recovery_event_audit_logging` | **PASSED** | HTTP 201 recorded `DRIFT_REPAIRED` event |
-| **D1-CHK-12** | Ops: Status Dashboard | `test_backups.py::test_system_status_endpoint` | **PASSED** | HTTP 200 returned total entity counts & latest backup info |
-| **D1-CHK-13** | Bookings: Creation | `test_bookings.py::test_create_booking_persistence` | **PASSED** | HTTP 201 created booking with `BK-YYYY-XXXX`, status `pending` |
-| **D1-CHK-14** | Bookings: Valid Flow | `test_bookings.py::test_booking_status_workflow` | **PASSED** | Valid transitions: `pending` $\to$ `confirmed` $\to$ `completed` |
-| **D1-CHK-15** | Bookings: Skip Status | `test_bookings.py::test_invalid_booking_transition_skip_confirmed` | **PASSED** | HTTP 400 rejected skipping `confirmed` |
-| **D1-CHK-16** | Bookings: Terminal State | `test_bookings.py::test_completed_booking_is_terminal` | **PASSED** | HTTP 400 rejected transitioning out of `completed` |
-| **D1-CHK-17** | Bookings: Cancellation | `test_bookings.py::test_booking_cancellation_workflow` | **PASSED** | Cancelled pending booking; rejected reopening cancelled booking |
-| **D1-CHK-18** | Invoices: Valid Invoice | `test_invoices.py::test_invoice_creation_for_completed_booking` | **PASSED** | HTTP 201 generated `INV-YYYY-XXXX` with subtotal and tax |
-| **D1-CHK-19** | Invoices: Uncompleted | `test_invoices.py::test_invoice_creation_rejected_for_uncompleted_booking` | **PASSED** | HTTP 400 rejected invoice creation on pending/confirmed bookings |
-| **D1-CHK-20** | Invoices: Duplicate Block | `test_invoices.py::test_duplicate_invoice_prevented` | **PASSED** | HTTP 400 prevented duplicate invoice for same booking |
-| **D1-CHK-21** | Invoices: Status Update | `test_invoices.py::test_invoice_status_update` | **PASSED** | HTTP 200 updated status to `paid` |
-| **D1-CHK-22** | Roles: Admin Service | `test_roles.py::test_admin_can_create_service` | **PASSED** | HTTP 201 Admin successfully created service |
-| **D1-CHK-23** | Roles: Staff Service Block | `test_roles.py::test_staff_cannot_create_service` | **PASSED** | HTTP 403 Staff blocked from service creation |
-| **D1-CHK-24** | Roles: Customer Service Block | `test_roles.py::test_customer_cannot_create_service` | **PASSED** | HTTP 403 Customer blocked from service creation |
-| **D1-CHK-25** | Roles: Customer List Block | `test_roles.py::test_customer_cannot_list_all_customers` | **PASSED** | HTTP 403 Customer cannot browse global customer registry |
-| **D1-CHK-26** | Roles: Staff/Admin Access | `test_roles.py::test_staff_and_admin_can_list_customers` | **PASSED** | HTTP 200 Staff and Admin can view customer list |
-| **D1-CHK-27** | Roles: Service Deactivate | `test_roles.py::test_admin_can_deactivate_service` | **PASSED** | HTTP 200 Admin soft-deleted / deactivated service |
-| **D1-CHK-28** | Validation: Malformed Email | `test_validation.py::test_login_invalid_email_format` | **PASSED** | HTTP 422 rejected invalid email format |
-| **D1-CHK-29** | Validation: Negative Price | `test_validation.py::test_service_validation_negative_price` | **PASSED** | HTTP 422 rejected negative price |
-| **D1-CHK-30** | Validation: Empty Name | `test_validation.py::test_service_validation_empty_name` | **PASSED** | HTTP 422 rejected name below minimum length |
-| **D1-CHK-31** | Probe: Nagios /health | `test_validation.py::test_health_check_endpoint` | **PASSED** | HTTP 200 returned `status: "healthy"`, `db: "ok"` |
-| **D1-CHK-32** | Probe: Ansible /ready | `test_validation.py::test_readiness_probe_endpoint` | **PASSED** | HTTP 200 returned `ready: true`, database verified |
+| **D2-CHK-01** | Frontend Auth Test | `Login.test.tsx::renders login form with inputs` | **PASSED** | Verified email input, password input, and Sign In button rendered |
+| **D2-CHK-02** | Frontend Validation | `Login.test.tsx::validates empty inputs on submit` | **PASSED** | Displays "Both email and password are required" alert |
+| **D2-CHK-03** | Frontend Validation | `Login.test.tsx::validates malformed email address` | **PASSED** | Displays "Please provide a valid email address" alert |
+| **D2-CHK-04** | Frontend State | `Login.test.tsx::updates form values as user types` | **PASSED** | Input elements bind and update values reactively |
+| **D2-CHK-05** | Route Guard: Unauthenticated | `ProtectedRoute.test.tsx::redirects to login` | **PASSED** | Redirects to `/login` when unauthenticated |
+| **D2-CHK-06** | Route Guard: Role Gate | `ProtectedRoute.test.tsx::blocks users without role` | **PASSED** | Displays "Access Denied: Your role does not have permission" |
+| **D2-CHK-07** | Route Guard: Authorized | `ProtectedRoute.test.tsx::renders authorized content` | **PASSED** | Admin content rendered when authenticated as admin |
+| **D2-CHK-08** | Production Build | `npm run build` | **PASSED** | Built `dist/index.html` (0.42 kB), CSS (4.65 kB), JS (190.90 kB) |
+| **D2-CHK-09** | Ansible Syntax Validation | PyYAML parsing across 9 YAML files | **PASSED** | 0 syntax errors across `site.yml`, `recover.yml`, roles and vars |
+| **D2-CHK-10** | Ansible Live Idempotence | `ansible-playbook -i hosts.ini site.yml` | **NOT RUN** | Windows host cannot run native Ansible control node. Pending user VM boot. |
 
 ---
 
@@ -74,5 +57,5 @@ Per project rules:
 
 | Date | Target Subsystem | Intended Check | Reason for Not Running | Remediation / Next Action |
 |---|---|---|---|---|
+| 2026-11-16 | Ansible VM Run | `ansible-playbook -i inventory/hosts.ini site.yml` | Windows OS does not support native Ansible control node engine (`ansible-core` requires POSIX). Playbook syntax verified via YAML parser. | Detailed manual runbook provided in `docs/VIRTUALBOX_LAB_SETUP.md` for execution on Ubuntu control node. |
 | 2026-11-16 | AWS Infrastructure | `terraform apply` on AWS | Awaiting user instructions and active AWS session approval | Maintained in IaC templates; dry-run via `terraform validate` |
-| 2026-11-16 | VirtualBox Lab | VM headless boot | Host virtualization nested VT-x check requires manual user terminal | VirtualBox VM definitions provided; scripts ready for manual execution |

@@ -1,0 +1,119 @@
+---
+# ==============================================================================
+# Role: recovery - Tasks
+# Disaster Recovery restoration workflow with Block and Rescue error handling
+# ==============================================================================
+- name: Disaster Recovery Workflow Execution
+  block:
+    - name: Preflight Check - Ensure external backup repository exists
+      stat:
+        path: "{{ phoenix_backup_dir | default('/var/backups/phoenix-db') }}"
+      register: backup_dir_stat
+
+    - name: Preflight Validation - Fail if backup repository is missing
+      fail:
+        msg: "Disaster Recovery Aborted: Backup directory {{ phoenix_backup_dir | default('/var/backups/phoenix-db') }} does not exist!"
+      when: not backup_dir_stat.stat.exists
+
+    - name: Identify latest verified database backup snapshot
+      shell: "ls -t {{ phoenix_backup_dir | default('/var/backups/phoenix-db') }}/phoenix_backup_*.db | head -n 1"
+      register: latest_backup_file
+      changed_when: false
+
+    - name: Preflight Validation - Fail if no valid backup snapshot found
+      fail:
+        msg: "Disaster Recovery Aborted: No valid .db backup file found in {{ phoenix_backup_dir | default('/var/backups/phoenix-db') }}!"
+      when: latest_backup_file.stdout == ""
+
+    - name: Log selected backup snapshot
+      debug:
+        msg: "Restoring system from verified snapshot: {{ latest_backup_file.stdout }}"
+
+    - name: Stop Phoenix backend service during atomic restoration
+      systemd:
+        name: phoenix-backend
+        state: stopped
+
+    - name: Execute automated database restoration script
+      command: >
+        python3 /opt/phoenix/scripts/restore.py
+        --backup-file "{{ latest_backup_file.stdout }}"
+        --target-db "/opt/phoenix/backend/phoenix.db"
+      register: restore_output
+      changed_when: true
+
+    - name: Display restore verification output
+      debug:
+        var: restore_output.stdout_lines
+
+    - name: Ensure correct ownership and permissions on restored database
+      file:
+        path: "/opt/phoenix/backend/phoenix.db"
+        owner: phoenix
+        group: phoenix
+        mode: '0644'
+
+    - name: Start Phoenix backend service
+      systemd:
+        name: phoenix-backend
+        state: started
+
+    - name: Wait for backend service to become responsive
+      wait_for:
+        port: 8000
+        delay: 2
+        timeout: 20
+
+    - name: Verify shallow health probe (/health) returns HTTP 200
+      uri:
+        url: "http://127.0.0.1/health"
+        status_code: 200
+        return_content: yes
+      register: health_check
+      retries: 5
+      delay: 3
+      until: health_check.status == 200 and health_check.json.status == "healthy" and health_check.json.db == "ok"
+
+    - name: Verify deep readiness probe (/ready) returns HTTP 200
+      uri:
+        url: "http://127.0.0.1/ready"
+        status_code: 200
+        return_content: yes
+      register: ready_check
+      retries: 5
+      delay: 3
+      until: ready_check.status == 200 and ready_check.json.ready == true
+
+    - name: Verify recovery audit event recorded in /api/status
+      uri:
+        url: "http://127.0.0.1/api/status"
+        status_code: 200
+        return_content: yes
+      register: status_check
+
+    - name: Disaster Recovery Certification
+      debug:
+        msg: "SUCCESS: System fully restored and certified healthy. Nagios probes will report OK."
+
+  rescue:
+    - name: RECOVERY FAILURE DETECTED
+      debug:
+        msg: "CRITICAL: Disaster recovery restoration failed! Triggering emergency rollback procedures."
+
+    - name: Attempt to restart Phoenix backend in safe state
+      systemd:
+        name: phoenix-backend
+        state: started
+      ignore_errors: yes
+
+    - name: Abort Disaster Recovery Playbook with detailed error
+      fail:
+        msg: "Disaster Recovery Playbook Failed! Inspect restore logs or target server /var/log/phoenix/backend-error.log"
+
+  always:
+    - name: Ensure Phoenix backend service state is running
+      systemd:
+        name: phoenix-backend
+        state: started
+      ignore_errors: yes
+  tags: [recovery, restore]

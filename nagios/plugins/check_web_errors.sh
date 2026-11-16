@@ -1,8 +1,20 @@
 #!/usr/bin/env bash
 # ==============================================================================
 # Nagios Custom Plugin: check_web_errors.sh
-# Counts recent HTTP 5xx errors from the Nginx access log
-# Exit codes: 0=OK, 1=WARNING, 2=CRITICAL, 3=UNKNOWN
+# Counts recent HTTP 5xx errors from the Nginx access log.
+#
+# Usage:
+#   ./check_web_errors.sh [-f <access_log>] [-w <warn>] [-c <crit>] [-m <minutes>]
+#   ./check_web_errors.sh --help
+#
+# Examples:
+#   ./check_web_errors.sh -f /var/log/nginx/access.log -w 5 -c 20 -m 5
+#
+# Exit codes:
+#   0 = OK
+#   1 = WARNING (5xx count >= warning threshold)
+#   2 = CRITICAL (5xx count >= critical threshold)
+#   3 = UNKNOWN (log file not found or invalid options)
 # ==============================================================================
 set -euo pipefail
 

@@ -4,8 +4,18 @@ Nagios Core Custom Plugin: check_web_errors.py
 Parses web server (Nginx/Apache) access logs, counts recent HTTP 5xx server errors,
 and triggers Nagios alerts based on configured threshold windows.
 
+Usage:
+  python3 check_web_errors.py -l /var/log/nginx/access.log -w 5 -c 20 -m 5
+  python3 check_web_errors.py --help
+
+Options:
+  -l, --log-file PATH      Path to web access log file (default: /var/log/nginx/access.log)
+  -w, --warning INT        Warning threshold for HTTP 5xx count (default: 5)
+  -c, --critical INT       Critical threshold for HTTP 5xx count (default: 20)
+  -m, --minutes INT        Sliding time window in minutes to inspect (default: 5)
+
 Exit Codes:
-  0 = OK
+  0 = OK (5xx count < warning threshold)
   1 = WARNING (5xx count >= warning threshold)
   2 = CRITICAL (5xx count >= critical threshold)
   3 = UNKNOWN (log file not found or unreadable)

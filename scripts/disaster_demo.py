@@ -80,7 +80,12 @@ def main():
     args = parser.parse_args()
 
     project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
-    db_abs = os.path.abspath(os.path.join(project_root, args.db_path))
+    if os.path.isabs(args.db_path):
+        db_abs = args.db_path
+    elif os.path.exists(os.path.abspath(args.db_path)):
+        db_abs = os.path.abspath(args.db_path)
+    else:
+        db_abs = os.path.abspath(os.path.join(project_root, args.db_path))
     simulate = (args.mode == "local-simulate")
 
     print("=" * 76)
